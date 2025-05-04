@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Candidate Filter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f6f8;
+      padding: 40px 20px;
+      max-width: 1000px;
+      margin: auto;
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+    }
+
+    .form-section {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      margin-bottom: 30px;
+    }
+
+    input[type="file"],
+    select,
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #3498db;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #2980b9;
+    }
+
+    .card {
+      background: #fff;
+      border-left: 5px solid #3498db;
+      padding: 16px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .card p {
+      margin: 8px 0;
+    }
+
+    .no-results {
+      background: #fff3cd;
+      color: #856404;
+      padding: 15px;
+      border-radius: 6px;
+      border: 1px solid #ffeeba;
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Candidate Filter</h1>
+
+  <div class="form-section">
+    <input type="file" id="upload" accept=".xlsx, .xls">
+    <select id="location">
+      <option value="">-- Select Location --</option>
+      <option value="udaipur">Udaipur</option>
+      <option value="other">Other</option>
+    </select>
+    <select id="qualification"></select>
+    <select id="experience">
+      <option value="">-- Select Experience --</option>
+      <option value="experienced">Experienced</option>
+      <option value="fresher">Fresher</option>
+    </select>
+    <select id="communication"></select>
+    <button onclick="filterCandidates()">Filter</button>
+  </div>
+
+  <div id="results"></div>
+
+  <script>
+    let candidates = [];
+
+    document.getElementById('upload').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = "Form Responses 1";
+
+        if (!workbook.Sheets[sheetName]) {
+          alert("Sheet 'Form Responses 1' not found.");
+          return;
+        }
+
+        const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+
+        // Normalize keys by trimming
+        const rows = rawRows.map(row => {
+          const cleaned = {};
+          for (let key in row) {
+            const trimmedKey = key.trim();
+            cleaned[trimmedKey] = typeof row[key] === 'string' ? row[key].trim() : row[key];
+          }
+          return cleaned;
+        });
+
+        const qualifications = new Set();
+        const communicationLevels = new Set();
+
+        candidates = rows.map(row => {
+          const name = row["Name"] || "Unnamed";
+          const isFromUdaipur = (row["Are you from udaipur or currently living in udaipur"] || "").toLowerCase().includes("yes");
+          const location = isFromUdaipur ? "udaipur" : "other";
+          const qualification = row["Highest qualification"] || "Unknown";
+          const experience = (row["Are you holding any experience"] || "").toLowerCase().includes("yes") ? "experienced" : "fresher";
+          const communication = row["Please give rating to your communication skills English"] || "Unknown";
+          const cv = row["Please share your cv within 24 hr you will receive response from our team"] || "N/A";
+          const jobDomain = row["Job Domain"] || "Not Provided";
+
+          qualifications.add(qualification);
+          communicationLevels.add(communication);
+
+          return {
+            name,
+            location,
+            qualification,
+            experience,
+            communication,
+            cv,
+            jobDomain
+          };
+        });
+
+        populateDropdown("qualification", Array.from(qualifications));
+        populateDropdown("communication", Array.from(communicationLevels));
+
+        alert("File processed. Now apply filters.");
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+
+    function populateDropdown(id, options) {
+      const select = document.getElementById(id);
+      select.innerHTML = `<option value="">-- Select ${id.charAt(0).toUpperCase() + id.slice(1)} --</option>`;
+      options.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt;
+        option.textContent = opt;
+        select.appendChild(option);
+      });
+    }
+
+    function filterCandidates() {
+      const loc = document.getElementById("location").value;
+      const qual = document.getElementById("qualification").value;
+      const exp = document.getElementById("experience").value;
+      const comm = document.getElementById("communication").value;
+
+      const filtered = candidates.filter(c => {
+        return (!loc || c.location === loc)
+            && (!qual || c.qualification === qual)
+            && (!exp || c.experience === exp)
+            && (!comm || c.communication === comm);
+      });
+
+      const results = document.getElementById("results");
+      results.innerHTML = "";
+
+      if (filtered.length === 0) {
+        results.innerHTML = `<div class="no-results">No matching candidates found.</div>`;
+        return;
+      }
+
+      filtered.forEach(c => {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `
+          <p><strong>Name:</strong> ${c.name}</p>
+          <p><strong>Location:</strong> ${c.location}</p>
+          <p><strong>Qualification:</strong> ${c.qualification}</p>
+          <p><strong>Experience:</strong> ${c.experience}</p>
+          <p><strong>Communication:</strong> ${c.communication}</p>
+          <p><strong>Job Domain:</strong> ${c.jobDomain}</p>
+          <p><strong>CV Link:</strong> <a href="${c.cv}" target="_blank">View CV</a></p>
+        `;
+        results.appendChild(div);
+      });
+    }
+  </script>
+
+</body>
+</html>
